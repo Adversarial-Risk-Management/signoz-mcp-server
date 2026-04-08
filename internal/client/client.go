@@ -34,12 +34,13 @@ type SigNoz struct {
 	baseURL        string
 	apiKey         string
 	authHeaderName string
+	customHeaders  map[string]string
 	logger         *zap.Logger
 	httpClient     *http.Client
 }
 
-func NewClient(log *zap.Logger, baseURL, apiKey, authHeaderName string) *SigNoz {
-	return &SigNoz{
+func NewClient(log *zap.Logger, baseURL, apiKey, authHeaderName string, customHeaders ...map[string]string) *SigNoz {
+	s := &SigNoz{
 		logger:         log,
 		baseURL:        baseURL,
 		apiKey:         apiKey,
@@ -47,6 +48,19 @@ func NewClient(log *zap.Logger, baseURL, apiKey, authHeaderName string) *SigNoz 
 		httpClient: &http.Client{
 			Transport: otelhttp.NewTransport(http.DefaultTransport),
 		},
+	}
+	if len(customHeaders) > 0 {
+		s.customHeaders = customHeaders[0]
+	}
+	return s
+}
+
+// setHeaders sets the standard headers and any custom headers on the request.
+func (s *SigNoz) setHeaders(req *http.Request) {
+	req.Header.Set(ContentType, "application/json")
+	req.Header.Set(s.authHeaderName, s.apiKey)
+	for k, v := range s.customHeaders {
+		req.Header.Set(k, v)
 	}
 }
 
@@ -81,8 +95,7 @@ func (s *SigNoz) ValidateCredentials(ctx context.Context) error {
 		return fmt.Errorf("failed to create validation request: %w", err)
 	}
 
-	req.Header.Set(ContentType, "application/json")
-	req.Header.Set(SignozApiKey, s.apiKey)
+	s.setHeaders(req)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -150,9 +163,7 @@ func (s *SigNoz) doRequest(ctx context.Context, method, reqURL string, body io.R
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
 
-		req.Header.Set(ContentType, "application/json")
-
-		req.Header.Set(s.authHeaderName, s.apiKey)
+		s.setHeaders(req)
 
 		resp, err := s.httpClient.Do(req)
 		if err != nil {

@@ -25,6 +25,8 @@ type Config struct {
 	// Client cache settings for multi-tenant mode
 	ClientCacheSize int
 	ClientCacheTTL  time.Duration
+
+	CustomHeaders map[string]string
 }
 
 const (
@@ -43,6 +45,8 @@ const (
 	OAuthAccessTTLMinutes   = "OAUTH_ACCESS_TOKEN_TTL_MINUTES"
 	OAuthRefreshTTLMinutes  = "OAUTH_REFRESH_TOKEN_TTL_MINUTES"
 	OAuthAuthCodeTTLSeconds = "OAUTH_AUTH_CODE_TTL_SECONDS"
+
+	SignozCustomHeaders = "SIGNOZ_CUSTOM_HEADERS"
 
 	defaultClientCacheSize       = 256
 	defaultClientCacheTTLMinutes = 30
@@ -75,7 +79,33 @@ func LoadConfig() (*Config, error) {
 		AuthCodeTTL:      time.Duration(authCodeTTLSeconds) * time.Second,
 		ClientCacheSize:  cacheSize,
 		ClientCacheTTL:   time.Duration(cacheTTLMinutes) * time.Minute,
+		CustomHeaders:    parseCustomHeaders(getEnv(SignozCustomHeaders, "")),
 	}, nil
+}
+
+// parseCustomHeaders parses a comma-separated list of Header:Value pairs.
+// Example: "CF-Access-Client-Id:xxx,CF-Access-Client-Secret:yyy"
+func parseCustomHeaders(raw string) map[string]string {
+	headers := make(map[string]string)
+	if raw == "" {
+		return headers
+	}
+	for _, pair := range strings.Split(raw, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		// Split on first colon only, so values can contain colons
+		parts := strings.SplitN(pair, ":", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			if key != "" {
+				headers[key] = value
+			}
+		}
+	}
+	return headers
 }
 
 func getEnv(key, defaultValue string) string {
